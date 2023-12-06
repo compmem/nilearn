@@ -29,7 +29,7 @@ def _estimator_fit(data, estimator, method=None):
         MiniBatchKMeans or AgglomerativeClustering.
 
     method: str,
-    {'kmeans', 'ward', 'complete', 'average', 'rena', 'hierarchical_kmeans'},
+    {'kmeans', 'ward', 'ward_corr', 'complete', 'average', 'rena', 'hierarchical_kmeans'},
     optional
 
         A method to choose between for brain parcellations.
@@ -133,7 +133,7 @@ class Parcellations(_MultiPCA):
 
     Parameters
     ----------
-    method : {'kmeans', 'ward', 'complete', 'average', 'rena', \
+    method : {'kmeans', 'ward', 'ward_corr', 'complete', 'average', 'rena', \
         'hierarchical_kmeans'}
         A method to choose between for brain parcellations.
         For a small number of parcels, kmeans is usually advisable.
@@ -144,6 +144,11 @@ class Parcellations(_MultiPCA):
 
     n_parcels : :obj:`int`, default=50
         Number of parcels to divide the data into.
+
+    min_corr : :obj:`int`, default=None
+        The Pearson correlation threshold at or below which clusters 
+        will not be merged. Only valid for ward_corr. If specified, 
+        n_parcels must be `None`.
 
     %(random_state)s
         Default=0.
@@ -261,6 +266,7 @@ class Parcellations(_MultiPCA):
     VALID_METHODS = [
         "kmeans",
         "ward",
+        "ward_corr",
         "complete",
         "average",
         "rena",
@@ -270,7 +276,8 @@ class Parcellations(_MultiPCA):
     def __init__(
         self,
         method,
-        n_parcels=50,
+        n_parcels=50, # or add a min_corr
+        min_corr=None, # minimum correlt
         random_state=0,
         mask=None,
         smoothing_fwhm=4.0,
@@ -292,6 +299,7 @@ class Parcellations(_MultiPCA):
     ):
         self.method = method
         self.n_parcels = n_parcels
+        self.min_corr = min_corr
         self.scaling = scaling
         self.n_iter = n_iter
 
@@ -336,7 +344,7 @@ class Parcellations(_MultiPCA):
         connectivity : :class:`numpy.ndarray`
             Voxel-to-voxel connectivity matrix computed from a mask.
             Note that, this attribute is returned only for selected methods
-            such as 'ward', 'complete', 'average'.
+            such as 'ward', 'ward_corr', 'complete', 'average'.
 
         """
         valid_methods = self.VALID_METHODS
@@ -414,6 +422,7 @@ class Parcellations(_MultiPCA):
 
             agglomerative = AgglomerativeClustering(
                 n_clusters=self.n_parcels,
+                min_corr=self.min_corr,
                 connectivity=connectivity,
                 linkage=self.method,
                 memory=self.memory,
@@ -428,8 +437,8 @@ class Parcellations(_MultiPCA):
         labels = labels + 1
         unique_labels = np.unique(labels)
 
-        # Check that appropriate number of labels were created
-        if len(unique_labels) != self.n_parcels:
+        # Check that appropriate number of labels were created (only if user specifies n_parcels)
+        if len(unique_labels) != self.n_parcels and self.n_parcels is not None:
             n_parcels_warning = (
                 "The number of generated labels does not "
                 "match the requested number of parcels."
