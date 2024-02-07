@@ -368,6 +368,10 @@ class Parcellations(_MultiPCA):
         if self.verbose:
             print(f"[{self.__class__.__name__}] computing {self.method}")
 
+        if self.method == "ward_corr":            
+            components = ((components - np.mean(components, axis=1, keepdims=True)) /
+                            np.std(components, axis=1, keepdims=True))
+            
         if self.method == "kmeans":
             from sklearn.cluster import MiniBatchKMeans
 
