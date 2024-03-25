@@ -16,6 +16,28 @@ from ..decomposition._multi_pca import _MultiPCA
 from .hierarchical_kmeans_clustering import HierarchicalKMeans
 from .rena_clustering import ReNA
 
+def binary_search(fn, target, lower_bound, upper_bound, thresh, max_iter=100, verbose=True):
+    for i in range(max_iter):
+        mid = (lower_bound + upper_bound) / 2
+        mid_value = fn(mid)
+
+        if verbose: 
+            print(f'i={i}: [{lower_bound}, {upper_bound}], {mid_value}')
+
+        if abs(mid_value - target) <= thresh:
+            if verbose:
+                print('Found value within threshold to target.')
+            
+            return mid
+        elif mid_value < target:
+            lower_bound = mid
+        else:
+            upper_bound = mid    
+    if verbose: 
+        print('Max iters reached.')
+
+    return mid 
+
 
 def _estimator_fit(data, estimator, method=None):
     """Estimator to fit on the data matrix.
@@ -423,6 +445,30 @@ class Parcellations(_MultiPCA):
             )
 
             from sklearn.cluster import AgglomerativeClustering
+
+            if self.method == 'ward_corr' and self.min_corr is None:
+                assert self.n_parcels is not None
+
+                def get_n_parcels(min_corr):
+                    agglomerative = AgglomerativeClustering(
+                        n_clusters=None,
+                        min_corr=min_corr,
+                        connectivity=connectivity,
+                        linkage=self.method,
+                        memory=self.memory)
+
+                    labels = self._cache(_estimator_fit, func_memory_level=1)(components.T, agglomerative)
+                    
+                    return len(np.unique(labels))
+
+                self.min_corr = binary_search(get_n_parcels, 
+                                              target=self.n_parcels,
+                                              lower_bound=-1,
+                                              upper_bound=1,
+                                              thresh=30,
+                                              max_iter=30,
+                                              verbose=True)
+                self.n_parcels = None
 
             agglomerative = AgglomerativeClustering(
                 n_clusters=self.n_parcels,
